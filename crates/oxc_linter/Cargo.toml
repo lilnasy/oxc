@@ -54,7 +54,7 @@ icu_segmenter = { workspace = true }
 ignore = { workspace = true }
 indexmap = { workspace = true, features = ["rayon"] }
 itertools = { workspace = true }
-javascript-globals = { workspace = true }
+javascript-globals = { git = "https://github.com/lilnasy/javascript-globals", branch = "add-framework-globals", version = "1.3.3" }
 json-strip-comments = { workspace = true }
 language-tags = { workspace = true }
 lazy-regex = { workspace = true }
