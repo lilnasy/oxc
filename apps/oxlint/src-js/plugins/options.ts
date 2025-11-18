@@ -22,8 +22,10 @@ export type Options = JsonValue[];
 // Default rule options
 export const DEFAULT_OPTIONS: Readonly<Options> = Object.freeze([]);
 
-// All rule options
-export const allOptions: Readonly<Options>[] = [DEFAULT_OPTIONS];
+// All rule options.
+// Indexed by options ID sent alongside ruleId for each file.
+// Element 0 is always the default options (empty array).
+export let allOptions: Readonly<Options>[] = [DEFAULT_OPTIONS];
 
 // Index into `allOptions` for default options
 export const DEFAULT_OPTIONS_ID = 0;
@@ -127,4 +129,40 @@ function mergeValues(configValue: JsonValue, defaultValue: JsonValue): JsonValue
   }
 
   return freeze(merged);
+}
+
+// Track if options have been initialized to avoid re-initialization
+let optionsInitialized = false;
+
+/**
+ * Set all external rule options.
+ * Called once from Rust after config building, before any linting occurs.
+ * @param optionsJson - JSON string of outer array of per-options arrays.
+ */
+export function setOptions(optionsJson: string): void {
+  try {
+    const parsed = JSON.parse(optionsJson);
+    if (!Array.isArray(parsed)) throw new TypeError("Expected optionsJson to decode to an array");
+    // Basic shape validation: each element must be an array (options tuple array)
+    for (let i = 0; i < parsed.length; i++) {
+      const el = parsed[i];
+      if (!Array.isArray(el)) throw new TypeError("Each options entry must be an array");
+    }
+    allOptions = parsed as Readonly<Options>[];
+    optionsInitialized = true;
+  } catch (err) {
+    // Re-throw with clearer message for Rust side logging.
+    throw new Error(
+      "Failed to parse external rule options JSON: " +
+        (err instanceof Error ? err.message : String(err)),
+    );
+  }
+}
+
+/**
+ * Check if options have been initialized.
+ * @returns `true` if options have been set, `false` otherwise.
+ */
+export function areOptionsInitialized(): boolean {
+  return optionsInitialized;
 }

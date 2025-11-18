@@ -38,6 +38,7 @@ function loadPluginWrapper(path: string, packageName: string | null): Promise<st
  * @param bufferId - ID of buffer containing file data
  * @param buffer - Buffer containing file data, or `null` if buffer with this ID was previously sent to JS
  * @param ruleIds - IDs of rules to run on this file
+ * @param optionsIds - IDs of options to use for rules on this file
  * @param settingsJSON - Settings for file, as JSON
  * @returns Diagnostics or error serialized to JSON string
  */
@@ -46,12 +47,13 @@ function lintFileWrapper(
   bufferId: number,
   buffer: Uint8Array | null,
   ruleIds: number[],
+  optionsIds: number[],
   settingsJSON: string,
 ): string {
   // `lintFileWrapper` is never called without `loadPluginWrapper` being called first,
   // so `lintFile` must be defined here
   debugAssertIsNonNull(lintFile);
-  return lintFile(filePath, bufferId, buffer, ruleIds, settingsJSON);
+  return lintFile(filePath, bufferId, buffer, ruleIds, optionsIds, settingsJSON);
 }
 
 // Get command line arguments, skipping first 2 (node binary and script path)

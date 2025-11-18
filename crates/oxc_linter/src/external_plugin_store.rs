@@ -15,6 +15,10 @@ define_index_type! {
     pub struct ExternalRuleId = u32;
 }
 
+define_index_type! {
+    pub struct ExternalOptionsId = u32;
+}
+
 #[derive(Debug)]
 pub struct ExternalPluginStore {
     registered_plugin_paths: FxHashSet<PathBuf>,
@@ -22,6 +26,7 @@ pub struct ExternalPluginStore {
     plugins: IndexVec<ExternalPluginId, ExternalPlugin>,
     plugin_names: FxHashMap<String, ExternalPluginId>,
     rules: IndexVec<ExternalRuleId, ExternalRule>,
+    options: IndexVec<ExternalOptionsId, serde_json::Value>,
 
     // `true` for `oxlint`, `false` for language server
     is_enabled: bool,
@@ -35,11 +40,16 @@ impl Default for ExternalPluginStore {
 
 impl ExternalPluginStore {
     pub fn new(is_enabled: bool) -> Self {
+        let mut options = IndexVec::default();
+        // Index 0 is reserved for "no options" (empty array)
+        options.push(serde_json::json!([]));
+
         Self {
             registered_plugin_paths: FxHashSet::default(),
             plugins: IndexVec::default(),
             plugin_names: FxHashMap::default(),
             rules: IndexVec::default(),
+            options,
             is_enabled,
         }
     }
@@ -118,6 +128,25 @@ impl ExternalPluginStore {
         let external_rule = &self.rules[external_rule_id];
         let plugin = &self.plugins[external_rule.plugin_id];
         (&plugin.name, &external_rule.name)
+    }
+
+    /// Add options to the store and return its ID.
+    /// Returns index 0 for empty arrays or null values (no options).
+    pub fn add_options(&mut self, options: serde_json::Value) -> ExternalOptionsId {
+        // If it's null or an empty array, return reserved index 0
+        if options.is_null() || options.as_array().is_some_and(Vec::is_empty) {
+            return ExternalOptionsId::from_usize(0);
+        }
+
+        self.options.push(options)
+    }
+
+    /// Serialize all options to JSON string.
+    ///
+    /// # Panics
+    /// Panics if serialization fails.
+    pub fn serialize_all_options(&self) -> String {
+        serde_json::to_string(&self.options).expect("Failed to serialize options")
     }
 }
 

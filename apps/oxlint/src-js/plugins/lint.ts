@@ -1,6 +1,6 @@
 import { setupFileContext, resetFileContext } from "./context.js";
 import { registeredRules } from "./load.js";
-import { allOptions, DEFAULT_OPTIONS_ID } from "./options.js";
+import { allOptions, areOptionsInitialized, DEFAULT_OPTIONS_ID, setOptions } from "./options.js";
 import { diagnostics } from "./report.js";
 import { setSettingsForFile, resetSettings } from "./settings.js";
 import { ast, initAst, resetSourceAndAst, setupSourceForFile } from "./source_code.js";
@@ -12,6 +12,7 @@ import {
   finalizeCompiledVisitor,
   initCompiledVisitor,
 } from "./visitor.js";
+import { getExternalRuleOptions } from "../bindings.js";
 
 // Lazy implementation
 /*
@@ -46,6 +47,7 @@ const PARSER_SERVICES_DEFAULT: Record<string, unknown> = Object.freeze({});
  * @param bufferId - ID of buffer containing file data
  * @param buffer - Buffer containing file data, or `null` if buffer with this ID was previously sent to JS
  * @param ruleIds - IDs of rules to run on this file
+ * @param optionsIds - IDs of options to use for rules on this file
  * @param settingsJSON - Settings for file, as JSON
  * @returns Diagnostics or error serialized to JSON string
  */
@@ -54,11 +56,9 @@ export function lintFile(
   bufferId: number,
   buffer: Uint8Array | null,
   ruleIds: number[],
+  optionsIds: number[],
   settingsJSON: string,
 ): string {
-  // TODO: Get `optionsIds` from Rust side
-  const optionsIds = ruleIds.map((_) => DEFAULT_OPTIONS_ID);
-
   try {
     lintFileImpl(filePath, bufferId, buffer, ruleIds, optionsIds, settingsJSON);
     return JSON.stringify({ Success: diagnostics });
@@ -145,6 +145,14 @@ function lintFileImpl(
     ruleIds.length === optionsIds.length,
     "Rule IDs and options IDs arrays must be the same length",
   );
+
+  // Initialize external rule options if not already initialized
+  if (!areOptionsInitialized()) {
+    const optionsJson = getExternalRuleOptions();
+    if (optionsJson !== null && optionsJson.length > 0) {
+      setOptions(optionsJson);
+    }
+  }
 
   for (let i = 0, len = ruleIds.length; i < len; i++) {
     const ruleId = ruleIds[i];

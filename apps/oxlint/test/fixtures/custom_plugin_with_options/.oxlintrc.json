@@ -1,0 +1,10 @@
+{
+  "categories": {
+    "correctness": "off"
+  },
+  "jsPlugins": ["./plugin.ts"],
+  "rules": {
+    "test-plugin-options/check-options": ["error", true, { "expected": "production" }]
+  }
+}
+
