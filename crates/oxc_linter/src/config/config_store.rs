@@ -1069,7 +1069,7 @@ mod test {
         // Prepare external plugin store with a custom plugin and rule
         let mut store = ExternalPluginStore::new(true);
         store.register_plugin(
-            "path/to/custom".to_string(),
+            "path/to/custom".to_string().into(),
             "custom".to_string(),
             0,
             vec!["my-rule".to_string()],
