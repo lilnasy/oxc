@@ -5,7 +5,7 @@ use std::{
 
 use rustc_hash::{FxHashMap, FxHashSet};
 
-use oxc_index::{IndexVec, define_index_type};
+use oxc_index::{IndexVec, define_index_type, index_vec};
 
 use crate::ExternalLinter;
 
@@ -42,9 +42,7 @@ impl Default for ExternalPluginStore {
 
 impl ExternalPluginStore {
     pub fn new(is_enabled: bool) -> Self {
-        let mut options = IndexVec::default();
-        // Index 0 is reserved for "no options" (empty array)
-        options.push(serde_json::json!([]));
+        let options = index_vec![serde_json::json!([])];
 
         Self {
             registered_plugin_paths: FxHashSet::default(),
