@@ -316,11 +316,6 @@ impl ConfigStore {
         self.base.base.config.plugins
     }
 
-    /// Access the external plugin store. Used by oxlint CLI to serialize external rule options.
-    pub fn external_plugin_store(&self) -> &ExternalPluginStore {
-        &self.external_plugin_store
-    }
-
     pub(crate) fn get_related_config(&self, path: &Path) -> &Config {
         if self.nested_configs.is_empty() {
             &self.base
