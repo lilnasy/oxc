@@ -12,7 +12,7 @@ export default definePlugin({
           noOptions: "No options provided",
         },
       },
-      createOnce(context) {
+      create(context) {
         // Don't access context.options here - it's not available yet!
         // Options are only available in visitor methods after setupContextForFile is called.
 
