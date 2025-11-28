@@ -147,5 +147,6 @@ export function setOptions(optionsJson: string): void {
       if (!isArray(el)) throw new TypeError("Each options entry must be an array", { cause: el });
     }
   }
+  deepFreezeArray(parsed);
   allOptions = parsed as Readonly<Options>[];
 }
