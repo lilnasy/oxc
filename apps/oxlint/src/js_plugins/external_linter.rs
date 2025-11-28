@@ -63,7 +63,7 @@ pub enum LintFileReturnValue {
 
 /// Wrap `setupConfigs` JS callback as a normal Rust function.
 ///
-/// Use an `mpsc::channel` to wait for the result from JS side, and block current thread until `lintFile`
+/// Use an `mpsc::channel` to wait for the result from JS side, and block current thread until `setupConfigs`
 /// completes execution.
 fn wrap_setup_configs(
     cb: JsSetupConfigsCb,
