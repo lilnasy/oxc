@@ -7,6 +7,8 @@ use rustc_hash::{FxHashMap, FxHashSet};
 
 use oxc_index::{IndexVec, define_index_type};
 
+use crate::ExternalLinter;
+
 define_index_type! {
     pub struct ExternalPluginId = u32;
 }
@@ -141,12 +143,14 @@ impl ExternalPluginStore {
         self.options.push(options)
     }
 
-    /// Serialize all options to JSON string.
-    ///
-    /// # Panics
-    /// Panics if serialization fails.
-    pub fn serialize_all_options(&self) -> String {
-        serde_json::to_string(&self.options).expect("Failed to serialize options")
+    /// # Errors
+    /// Returns an error if serialization of rule options fails.
+    pub fn setup_configs(&self, external_linter: &ExternalLinter) -> Result<(), String> {
+        let json = serde_json::to_string(&self.options);
+        match json {
+            Ok(options_json) => (external_linter.setup_configs)(options_json),
+            Err(err) => Err(format!("Failed to serialize external plugin options: {err}")),
+        }
     }
 }
 

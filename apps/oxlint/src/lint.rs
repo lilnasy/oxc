@@ -291,6 +291,18 @@ impl CliRunner {
             }
         };
 
+        // TODO: refactor this elsewhere.
+        // This code is in the oxlint app, not in oxc_linter crate
+        if let Some(ref external_linter) = external_linter
+            && let Err(err) = external_plugin_store.setup_configs(external_linter)
+        {
+            print_and_flush_stdout(
+                stdout,
+                &format!("Failed to setup external plugin options: {err}\n"),
+            );
+            return CliRunResult::InvalidOptionConfig;
+        }
+
         let report_unused_directives = match inline_config_options.report_unused_directives {
             ReportUnusedDirectives::WithoutSeverity(true) => Some(AllowWarnDeny::Warn),
             ReportUnusedDirectives::WithSeverity(Some(severity)) => Some(severity),

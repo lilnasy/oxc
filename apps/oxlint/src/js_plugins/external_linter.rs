@@ -15,18 +15,20 @@ use oxc_linter::{
 
 use crate::{
     generated::raw_transfer_constants::{BLOCK_ALIGN, BUFFER_SIZE},
-    run::{JsLintFileCb, JsLoadPluginCb},
+    run::{JsLintFileCb, JsLoadPluginCb, JsSetupConfigsCb},
 };
 
 /// Wrap JS callbacks as normal Rust functions, and create [`ExternalLinter`].
 pub fn create_external_linter(
     load_plugin: JsLoadPluginCb,
+    setup_configs: JsSetupConfigsCb,
     lint_file: JsLintFileCb,
 ) -> ExternalLinter {
     let rust_load_plugin = wrap_load_plugin(load_plugin);
+    let rust_setup_configs = wrap_setup_configs(setup_configs);
     let rust_lint_file = wrap_lint_file(lint_file);
 
-    ExternalLinter::new(rust_load_plugin, rust_lint_file)
+    ExternalLinter::new(rust_load_plugin, rust_setup_configs, rust_lint_file)
 }
 
 /// Wrap `loadPlugin` JS callback as a normal Rust function.
@@ -57,6 +59,45 @@ fn wrap_load_plugin(cb: JsLoadPluginCb) -> ExternalLinterLoadPluginCb {
 pub enum LintFileReturnValue {
     Success(Vec<LintFileResult>),
     Failure(String),
+}
+
+/// Wrap `setupConfigs` JS callback as a normal Rust function.
+///
+/// Use an `mpsc::channel` to wait for the result from JS side, and block current thread until `lintFile`
+/// completes execution.
+fn wrap_setup_configs(
+    cb: JsSetupConfigsCb,
+) -> Box<dyn Fn(String) -> Result<(), String> + Send + Sync> {
+    Box::new(move |options_json: String| {
+        let (tx, rx) = channel();
+
+        // Send data to JS
+        let status = cb.call_with_return_value(
+            FnArgs::from((options_json,)),
+            ThreadsafeFunctionCallMode::Blocking,
+            move |result, _env| {
+                let _ = match &result {
+                    Ok(r) => tx.send(Ok(r.clone())),
+                    Err(e) => tx.send(Err(e.to_string())),
+                };
+                result.map(|_| ())
+            },
+        );
+
+        assert!(status == Status::Ok, "Failed to schedule setupConfigs callback: {status:?}");
+
+        match rx.recv() {
+            Ok(Ok(result)) => {
+                if result == "ok" {
+                    Ok(())
+                } else {
+                    Err(result)
+                }
+            }
+            Ok(Err(err)) => Err(err),
+            Err(err) => panic!("setupConfigs callback did not respond: {err}"),
+        }
+    })
 }
 
 /// Wrap `lintFile` JS callback as a normal Rust function.

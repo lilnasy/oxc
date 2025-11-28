@@ -1,6 +1,6 @@
 import { setupFileContext, resetFileContext } from "./context.js";
 import { registeredRules } from "./load.js";
-import { allOptions, areOptionsInitialized, DEFAULT_OPTIONS_ID, setOptions } from "./options.js";
+import { allOptions, DEFAULT_OPTIONS_ID } from "./options.js";
 import { diagnostics } from "./report.js";
 import { setSettingsForFile, resetSettings } from "./settings.js";
 import { ast, initAst, resetSourceAndAst, setupSourceForFile } from "./source_code.js";
