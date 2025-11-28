@@ -329,13 +329,6 @@ impl CliRunner {
             return CliRunResult::None;
         }
 
-        // After building config, serialize external rule options for JS side.
-        #[cfg(all(feature = "napi", target_pointer_width = "64", target_endian = "little"))]
-        {
-            let store = config_store.external_plugin_store();
-            crate::set_external_options_json(store);
-        }
-
         let files_to_lint = paths
             .into_iter()
             .filter(|path| !ignore_matcher.should_ignore(Path::new(path)))
