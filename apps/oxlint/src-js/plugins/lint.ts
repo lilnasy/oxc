@@ -156,6 +156,9 @@ function lintFileImpl(
     // Set `options` for rule
     const optionsId = optionsIds[i];
     debugAssert(optionsId < allOptions.length, "Options ID out of bounds");
+
+    // If the rule has no user-provided options, use the plugin-provided default
+    // options (which falls back to `DEFAULT_OPTIONS`)
     ruleDetails.options =
       optionsId === DEFAULT_OPTIONS_ID ? ruleDetails.defaultOptions : allOptions[optionsId];
 
