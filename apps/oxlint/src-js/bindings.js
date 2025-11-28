@@ -575,6 +575,5 @@ if (!nativeBinding) {
   throw new Error(`Failed to load native binding`)
 }
 
-const { getExternalRuleOptions, lint } = nativeBinding
-export { getExternalRuleOptions }
+const { lint } = nativeBinding
 export { lint }

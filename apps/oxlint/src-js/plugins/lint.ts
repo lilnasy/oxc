@@ -12,7 +12,6 @@ import {
   finalizeCompiledVisitor,
   initCompiledVisitor,
 } from "./visitor.js";
-import { getExternalRuleOptions } from "../bindings.js";
 
 // Lazy implementation
 /*
@@ -145,14 +144,6 @@ function lintFileImpl(
     ruleIds.length === optionsIds.length,
     "Rule IDs and options IDs arrays must be the same length",
   );
-
-  // Initialize external rule options if not already initialized
-  if (!areOptionsInitialized()) {
-    const optionsJson = getExternalRuleOptions();
-    if (optionsJson !== null && optionsJson.length > 0) {
-      setOptions(optionsJson);
-    }
-  }
 
   for (let i = 0, len = ruleIds.length; i < len; i++) {
     const ruleId = ruleIds[i];
