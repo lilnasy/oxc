@@ -3,14 +3,14 @@
 use oxc_ast::ast::*;
 use oxc_span::GetSpan;
 
-use crate::{ParserImpl, diagnostics};
+use crate::{ParserImpl, diagnostics, lexer::TokenStore};
 
-pub trait CoverGrammar<'a, T>: Sized {
-    fn cover(value: T, p: &mut ParserImpl<'a>) -> Self;
+pub trait CoverGrammar<'a, T, Store: TokenStore<'a>>: Sized {
+    fn cover(value: T, p: &mut ParserImpl<'a, Store>) -> Self;
 }
 
-impl<'a> CoverGrammar<'a, Expression<'a>> for AssignmentTarget<'a> {
-    fn cover(expr: Expression<'a>, p: &mut ParserImpl<'a>) -> Self {
+impl<'a, Store: TokenStore<'a>> CoverGrammar<'a, Expression<'a>, Store> for AssignmentTarget<'a> {
+    fn cover(expr: Expression<'a>, p: &mut ParserImpl<'a, Store>) -> Self {
         match expr {
             Expression::ArrayExpression(array_expr) => {
                 let pat = ArrayAssignmentTarget::cover(array_expr.unbox(), p);
@@ -25,8 +25,10 @@ impl<'a> CoverGrammar<'a, Expression<'a>> for AssignmentTarget<'a> {
     }
 }
 
-impl<'a> CoverGrammar<'a, Expression<'a>> for SimpleAssignmentTarget<'a> {
-    fn cover(expr: Expression<'a>, p: &mut ParserImpl<'a>) -> Self {
+impl<'a, Store: TokenStore<'a>> CoverGrammar<'a, Expression<'a>, Store>
+    for SimpleAssignmentTarget<'a>
+{
+    fn cover(expr: Expression<'a>, p: &mut ParserImpl<'a, Store>) -> Self {
         match expr {
             Expression::Identifier(ident) => {
                 SimpleAssignmentTarget::AssignmentTargetIdentifier(ident)
@@ -90,8 +92,10 @@ impl<'a> CoverGrammar<'a, Expression<'a>> for SimpleAssignmentTarget<'a> {
     }
 }
 
-impl<'a> CoverGrammar<'a, ArrayExpression<'a>> for ArrayAssignmentTarget<'a> {
-    fn cover(expr: ArrayExpression<'a>, p: &mut ParserImpl<'a>) -> Self {
+impl<'a, Store: TokenStore<'a>> CoverGrammar<'a, ArrayExpression<'a>, Store>
+    for ArrayAssignmentTarget<'a>
+{
+    fn cover(expr: ArrayExpression<'a>, p: &mut ParserImpl<'a, Store>) -> Self {
         let mut elements = p.ast.vec();
         let mut rest = None;
 
@@ -136,8 +140,10 @@ impl<'a> CoverGrammar<'a, ArrayExpression<'a>> for ArrayAssignmentTarget<'a> {
     }
 }
 
-impl<'a> CoverGrammar<'a, Expression<'a>> for AssignmentTargetMaybeDefault<'a> {
-    fn cover(expr: Expression<'a>, p: &mut ParserImpl<'a>) -> Self {
+impl<'a, Store: TokenStore<'a>> CoverGrammar<'a, Expression<'a>, Store>
+    for AssignmentTargetMaybeDefault<'a>
+{
+    fn cover(expr: Expression<'a>, p: &mut ParserImpl<'a, Store>) -> Self {
         match expr {
             Expression::AssignmentExpression(assignment_expr) => {
                 if assignment_expr.operator != AssignmentOperator::Assign {
@@ -156,14 +162,18 @@ impl<'a> CoverGrammar<'a, Expression<'a>> for AssignmentTargetMaybeDefault<'a> {
     }
 }
 
-impl<'a> CoverGrammar<'a, AssignmentExpression<'a>> for AssignmentTargetWithDefault<'a> {
-    fn cover(expr: AssignmentExpression<'a>, p: &mut ParserImpl<'a>) -> Self {
+impl<'a, Store: TokenStore<'a>> CoverGrammar<'a, AssignmentExpression<'a>, Store>
+    for AssignmentTargetWithDefault<'a>
+{
+    fn cover(expr: AssignmentExpression<'a>, p: &mut ParserImpl<'a, Store>) -> Self {
         p.ast.assignment_target_with_default(expr.span, expr.left, expr.right)
     }
 }
 
-impl<'a> CoverGrammar<'a, ObjectExpression<'a>> for ObjectAssignmentTarget<'a> {
-    fn cover(expr: ObjectExpression<'a>, p: &mut ParserImpl<'a>) -> Self {
+impl<'a, Store: TokenStore<'a>> CoverGrammar<'a, ObjectExpression<'a>, Store>
+    for ObjectAssignmentTarget<'a>
+{
+    fn cover(expr: ObjectExpression<'a>, p: &mut ParserImpl<'a, Store>) -> Self {
         let mut properties = p.ast.vec();
         let mut rest = None;
 
@@ -203,8 +213,10 @@ impl<'a> CoverGrammar<'a, ObjectExpression<'a>> for ObjectAssignmentTarget<'a> {
     }
 }
 
-impl<'a> CoverGrammar<'a, ObjectProperty<'a>> for AssignmentTargetProperty<'a> {
-    fn cover(property: ObjectProperty<'a>, p: &mut ParserImpl<'a>) -> Self {
+impl<'a, Store: TokenStore<'a>> CoverGrammar<'a, ObjectProperty<'a>, Store>
+    for AssignmentTargetProperty<'a>
+{
+    fn cover(property: ObjectProperty<'a>, p: &mut ParserImpl<'a, Store>) -> Self {
         if property.shorthand {
             let binding = match property.key {
                 PropertyKey::StaticIdentifier(ident) => {

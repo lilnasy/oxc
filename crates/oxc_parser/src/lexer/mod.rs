@@ -7,7 +7,7 @@
 
 use rustc_hash::FxHashMap;
 
-use oxc_allocator::Allocator;
+use oxc_allocator::{Allocator, Vec};
 use oxc_ast::ast::RegExpFlags;
 use oxc_diagnostics::OxcDiagnostic;
 use oxc_span::{SourceType, Span};
@@ -40,18 +40,90 @@ pub use token::Token;
 use source::{Source, SourcePosition};
 use trivia_builder::TriviaBuilder;
 
+pub trait TokenStore<'a> {
+    type Checkpoint: Clone;
+
+    fn new(allocator: &'a Allocator) -> Self;
+    fn push(&mut self, token: Token);
+    fn checkpoint(&self) -> Self::Checkpoint;
+    fn rewind(&mut self, checkpoint: Self::Checkpoint);
+    fn take(&mut self, allocator: &'a Allocator) -> Vec<'a, Token>;
+}
+
+#[derive(Debug, Default, Clone, Copy)]
+pub struct NoopTokenStore;
+
+impl<'a> TokenStore<'a> for NoopTokenStore {
+    type Checkpoint = ();
+
+    #[inline]
+    fn new(_: &'a Allocator) -> Self {
+        Self
+    }
+
+    #[inline]
+    fn push(&mut self, _: Token) {}
+
+    #[inline]
+    fn checkpoint(&self) -> Self::Checkpoint {}
+
+    #[inline]
+    fn rewind(&mut self, _: ()) {}
+
+    #[inline]
+    fn take(&mut self, allocator: &'a Allocator) -> Vec<'a, Token> {
+        Vec::new_in(allocator)
+    }
+}
+
+#[derive(Debug)]
+pub struct RealTokenStore<'a> {
+    tokens: Vec<'a, Token>,
+}
+
+impl<'a> TokenStore<'a> for RealTokenStore<'a> {
+    type Checkpoint = u32;
+
+    #[inline]
+    fn new(allocator: &'a Allocator) -> Self {
+        Self { tokens: Vec::new_in(allocator) }
+    }
+
+    #[inline]
+    fn push(&mut self, token: Token) {
+        self.tokens.push(token);
+    }
+
+    #[inline]
+    fn checkpoint(&self) -> Self::Checkpoint {
+        self.tokens.len() as u32
+    }
+
+    #[inline]
+    fn rewind(&mut self, checkpoint: Self::Checkpoint) {
+        self.tokens.truncate(checkpoint as usize);
+    }
+
+    #[inline]
+    fn take(&mut self, allocator: &'a Allocator) -> Vec<'a, Token> {
+        let empty = Vec::new_in(allocator);
+        std::mem::replace(&mut self.tokens, empty)
+    }
+}
+
 #[derive(Debug, Clone)]
-pub struct LexerCheckpoint<'a> {
+pub struct LexerCheckpoint<'a, C: Clone> {
     source_position: SourcePosition<'a>,
     token: Token,
     errors_snapshot: ErrorSnapshot,
+    token_checkpoint: C,
 }
 
 #[derive(Debug, Clone)]
 enum ErrorSnapshot {
     Empty,
     Count(usize),
-    Full(Vec<OxcDiagnostic>),
+    Full(std::vec::Vec<OxcDiagnostic>),
 }
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
@@ -61,7 +133,7 @@ pub enum LexerContext {
     JsxAttributeValue,
 }
 
-pub struct Lexer<'a> {
+pub struct Lexer<'a, Store: TokenStore<'a> = NoopTokenStore> {
     allocator: &'a Allocator,
 
     // Wrapper around source text. Must not be changed after initialization.
@@ -71,7 +143,7 @@ pub struct Lexer<'a> {
 
     token: Token,
 
-    pub(crate) errors: Vec<OxcDiagnostic>,
+    pub(crate) errors: std::vec::Vec<OxcDiagnostic>,
 
     context: LexerContext,
 
@@ -86,9 +158,11 @@ pub struct Lexer<'a> {
 
     /// `memchr` Finder for end of multi-line comments. Created lazily when first used.
     multi_line_comment_end_finder: Option<memchr::memmem::Finder<'static>>,
+
+    tokens: Store,
 }
 
-impl<'a> Lexer<'a> {
+impl<'a, Store: TokenStore<'a>> Lexer<'a, Store> {
     /// Create new `Lexer`.
     ///
     /// Requiring a `UniquePromise` to be provided guarantees only 1 `Lexer` can exist
@@ -98,7 +172,10 @@ impl<'a> Lexer<'a> {
         source_text: &'a str,
         source_type: SourceType,
         unique: UniquePromise,
-    ) -> Self {
+    ) -> Self
+    where
+        Store: TokenStore<'a>,
+    {
         let source = Source::new(source_text, unique);
 
         // The first token is at the start of file, so is allows on a new line
@@ -114,6 +191,7 @@ impl<'a> Lexer<'a> {
             escaped_strings: FxHashMap::default(),
             escaped_templates: FxHashMap::default(),
             multi_line_comment_end_finder: None,
+            tokens: Store::new(allocator),
         }
     }
 
@@ -143,7 +221,7 @@ impl<'a> Lexer<'a> {
 
     /// Creates a checkpoint storing the current lexer state.
     /// Use `rewind` to restore the lexer to the state stored in the checkpoint.
-    pub fn checkpoint(&self) -> LexerCheckpoint<'a> {
+    pub fn checkpoint(&self) -> LexerCheckpoint<'a, Store::Checkpoint> {
         let errors_snapshot = if self.errors.is_empty() {
             ErrorSnapshot::Empty
         } else {
@@ -153,12 +231,13 @@ impl<'a> Lexer<'a> {
             source_position: self.source.position(),
             token: self.token,
             errors_snapshot,
+            token_checkpoint: self.tokens.checkpoint(),
         }
     }
 
     /// Create a checkpoint that can handle error popping.
     /// This is more expensive as it clones the errors vector.
-    pub(crate) fn checkpoint_with_error_recovery(&self) -> LexerCheckpoint<'a> {
+    pub(crate) fn checkpoint_with_error_recovery(&self) -> LexerCheckpoint<'a, Store::Checkpoint> {
         let errors_snapshot = if self.errors.is_empty() {
             ErrorSnapshot::Empty
         } else {
@@ -168,11 +247,12 @@ impl<'a> Lexer<'a> {
             source_position: self.source.position(),
             token: self.token,
             errors_snapshot,
+            token_checkpoint: self.tokens.checkpoint(),
         }
     }
 
     /// Rewinds the lexer to the same state as when the passed in `checkpoint` was created.
-    pub fn rewind(&mut self, checkpoint: LexerCheckpoint<'a>) {
+    pub fn rewind(&mut self, checkpoint: LexerCheckpoint<'a, Store::Checkpoint>) {
         match checkpoint.errors_snapshot {
             ErrorSnapshot::Empty => self.errors.clear(),
             ErrorSnapshot::Count(len) => self.errors.truncate(len),
@@ -180,6 +260,7 @@ impl<'a> Lexer<'a> {
         }
         self.source.set_position(checkpoint.source_position);
         self.token = checkpoint.token;
+        self.tokens.rewind(checkpoint.token_checkpoint);
     }
 
     pub fn peek_token(&mut self) -> Token {
@@ -229,6 +310,7 @@ impl<'a> Lexer<'a> {
         self.token.set_end(self.offset());
         let token = self.token;
         self.trivia_builder.handle_token(token);
+        self.tokens.push(token);
         self.token = Token::default();
         token
     }
@@ -237,6 +319,12 @@ impl<'a> Lexer<'a> {
     #[inline]
     pub fn advance_to_end(&mut self) {
         self.source.advance_to_end();
+    }
+
+    /// Take collected tokens (if any). No-op for `NoopTokenStore`.
+    #[inline]
+    pub fn take_tokens(&mut self) -> Vec<'a, Token> {
+        self.tokens.take(self.allocator)
     }
 
     // ---------- Private Methods ---------- //

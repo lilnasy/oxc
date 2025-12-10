@@ -4,9 +4,12 @@ use oxc_allocator::{Box, Dummy, Vec};
 use oxc_ast::ast::*;
 use oxc_span::{Atom, GetSpan, Span};
 
-use crate::{ParserImpl, diagnostics, lexer::Kind};
+use crate::{
+    ParserImpl, diagnostics,
+    lexer::{Kind, TokenStore},
+};
 
-impl<'a> ParserImpl<'a> {
+impl<'a, Store: TokenStore<'a>> ParserImpl<'a, Store> {
     pub(crate) fn parse_jsx_expression(&mut self) -> Expression<'a> {
         let span = self.start_span();
         self.bump_any(); // bump `<`

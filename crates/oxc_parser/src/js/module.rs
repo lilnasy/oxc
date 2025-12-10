@@ -6,7 +6,7 @@ use rustc_hash::FxHashMap;
 use super::FunctionKind;
 use crate::{
     ParserImpl, StatementContext, diagnostics,
-    lexer::Kind,
+    lexer::{Kind, TokenStore},
     modifiers::{Modifier, ModifierFlags, ModifierKind, Modifiers},
 };
 
@@ -26,7 +26,7 @@ enum ImportOrExportSpecifier<'a> {
     Export(ExportSpecifier<'a>),
 }
 
-impl<'a> ParserImpl<'a> {
+impl<'a, Store: TokenStore<'a>> ParserImpl<'a, Store> {
     /// [Import Call](https://tc39.es/ecma262/#sec-import-calls)
     /// `ImportCall` : import ( `AssignmentExpression` )
     pub(crate) fn parse_import_expression(
@@ -987,7 +987,7 @@ mod test {
     use oxc_ast::ast::{ImportDeclarationSpecifier, ImportOrExportKind, ImportPhase, Statement};
     use oxc_span::SourceType;
 
-    use crate::Parser;
+    use crate::StandardParser;
     #[test]
     fn test_parse_import_declaration() {
         let src = "import foo from 'bar';";
@@ -1291,7 +1291,7 @@ mod test {
         let src = "import type from '../type.js'";
         let source_type = SourceType::default().with_typescript(false);
         let allocator = Allocator::default();
-        let ret = Parser::new(&allocator, src, source_type).parse();
+        let ret = StandardParser::new(&allocator, src, source_type).parse();
         assert!(ret.errors.is_empty(), "Failed to parse source: {src:?}, error: {:?}", ret.errors);
         let declarations = ret.program.body.iter().collect::<Vec<_>>();
         assert_eq!(declarations.len(), 1);
@@ -1311,7 +1311,7 @@ mod test {
     ) {
         let source_type = SourceType::default().with_typescript(true);
         let allocator = Allocator::default();
-        let ret = Parser::new(&allocator, src, source_type).parse();
+        let ret = StandardParser::new(&allocator, src, source_type).parse();
         assert!(ret.errors.is_empty(), "Failed to parse source: {src:?}, error: {:?}", ret.errors);
         f(ret.program.body.iter().collect::<Vec<_>>());
     }
@@ -1323,7 +1323,7 @@ mod test {
     ) {
         let source_type = SourceType::default().with_typescript(true);
         let allocator = Allocator::default();
-        let ret = Parser::new(&allocator, src, source_type).parse();
+        let ret = StandardParser::new(&allocator, src, source_type).parse();
         assert!(ret.errors.is_empty(), "Failed to parse source: {src:?}, error: {:?}", ret.errors);
         let statements =
             ret.program

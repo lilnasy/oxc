@@ -5,7 +5,7 @@ use oxc_allocator::StringBuilder;
 use crate::diagnostics;
 
 use super::{
-    Kind, Lexer, SourcePosition, Token, cold_branch,
+    Kind, Lexer, SourcePosition, Token, TokenStore, cold_branch,
     search::{SafeByteMatchTable, byte_search, safe_byte_match_table},
 };
 
@@ -33,7 +33,7 @@ static TEMPLATE_LITERAL_ESCAPED_MATCH_TABLE: SafeByteMatchTable = safe_byte_matc
 );
 
 /// 12.8.6 Template Literal Lexical Components
-impl<'a> Lexer<'a> {
+impl<'a, Store: TokenStore<'a>> Lexer<'a, Store> {
     /// Read template literal component.
     ///
     /// This function handles the common case where template contains no escapes or `\r` characters
@@ -409,7 +409,8 @@ mod test {
     use oxc_allocator::Allocator;
     use oxc_span::SourceType;
 
-    use super::super::{Kind, Lexer, UniquePromise};
+    use super::{Kind, Lexer};
+    use crate::{NoopTokenStore, UniquePromise};
 
     #[test]
     fn template_literal_linebreaks() {
@@ -442,7 +443,8 @@ mod test {
         fn run_test(source_text: String, expected_escaped: String, is_only_part: bool) {
             let allocator = Allocator::default();
             let unique = UniquePromise::new_for_tests_and_benchmarks();
-            let mut lexer = Lexer::new(&allocator, &source_text, SourceType::default(), unique);
+            let mut lexer: Lexer<'_, NoopTokenStore> =
+                Lexer::new(&allocator, &source_text, SourceType::default(), unique);
             let token = lexer.next_token();
             assert_eq!(
                 token.kind(),

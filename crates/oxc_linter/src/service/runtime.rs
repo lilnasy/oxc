@@ -21,7 +21,7 @@ use smallvec::SmallVec;
 
 use oxc_allocator::{Allocator, AllocatorGuard, AllocatorPool};
 use oxc_diagnostics::{DiagnosticSender, DiagnosticService, Error, OxcDiagnostic};
-use oxc_parser::{ParseOptions, Parser};
+use oxc_parser::{ParseOptions, StandardParser};
 use oxc_resolver::Resolver;
 use oxc_semantic::{Semantic, SemanticBuilder};
 use oxc_span::{CompactStr, SourceType, VALID_EXTENSIONS};
@@ -968,13 +968,14 @@ impl Runtime {
         source_type: SourceType,
         check_syntax_errors: bool,
     ) -> Result<(ResolvedModuleRecord, Semantic<'a>), Vec<OxcDiagnostic>> {
-        let ret = Parser::new(allocator, source_text, source_type)
-            .with_options(ParseOptions {
-                parse_regular_expression: true,
-                allow_return_outside_function: true,
-                ..ParseOptions::default()
-            })
-            .parse();
+        let ret: oxc_parser::ParserReturn<'_> =
+            StandardParser::new(allocator, source_text, source_type)
+                .with_options(ParseOptions {
+                    parse_regular_expression: true,
+                    allow_return_outside_function: true,
+                    ..ParseOptions::default()
+                })
+                .parse();
 
         if !ret.errors.is_empty() {
             return Err(if ret.is_flow_language { vec![] } else { ret.errors });

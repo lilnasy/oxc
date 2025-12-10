@@ -5,7 +5,7 @@ use oxc_span::{GetSpan, Span};
 
 use crate::{
     Context, ParserImpl, StatementContext, diagnostics,
-    lexer::Kind,
+    lexer::{Kind, TokenStore},
     modifiers::{ModifierFlags, ModifierKind, Modifiers},
 };
 
@@ -15,7 +15,7 @@ type Extends<'a> =
     Vec<'a, (Expression<'a>, Option<Box<'a, TSTypeParameterInstantiation<'a>>>, Span)>;
 
 /// Section 15.7 Class Definitions
-impl<'a> ParserImpl<'a> {
+impl<'a, Store: TokenStore<'a>> ParserImpl<'a, Store> {
     // `start_span` points at the start of all decoractors and `class` keyword.
     pub(crate) fn parse_class_statement(
         &mut self,

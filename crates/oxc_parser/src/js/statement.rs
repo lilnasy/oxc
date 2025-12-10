@@ -5,11 +5,11 @@ use oxc_span::{Atom, GetSpan, Span};
 use super::{VariableDeclarationParent, grammar::CoverGrammar};
 use crate::{
     Context, ParserImpl, StatementContext, diagnostics,
-    lexer::Kind,
+    lexer::{Kind, TokenStore},
     modifiers::{Modifier, ModifierFlags, ModifierKind, Modifiers},
 };
 
-impl<'a> ParserImpl<'a> {
+impl<'a, Store: TokenStore<'a>> ParserImpl<'a, Store> {
     // Section 12
     // The InputElementHashbangOrRegExp goal is used at the start of a Script
     // or Module.

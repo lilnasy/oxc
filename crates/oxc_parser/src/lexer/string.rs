@@ -5,7 +5,7 @@ use oxc_allocator::StringBuilder;
 use crate::diagnostics;
 
 use super::{
-    Kind, Lexer, LexerContext, Span, Token, cold_branch,
+    Kind, Lexer, LexerContext, Span, Token, TokenStore, cold_branch,
     search::{SafeByteMatchTable, byte_search, safe_byte_match_table},
 };
 
@@ -202,7 +202,7 @@ macro_rules! handle_string_literal_escape {
 }
 
 /// 12.9.4 String Literals
-impl<'a> Lexer<'a> {
+impl<'a, Store: TokenStore<'a>> Lexer<'a, Store> {
     /// Read string literal delimited with `"`.
     /// # SAFETY
     /// Next character must be `"`.

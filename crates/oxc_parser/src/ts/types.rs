@@ -5,13 +5,13 @@ use oxc_syntax::operator::UnaryOperator;
 
 use crate::{
     Context, ParserImpl, diagnostics,
-    lexer::Kind,
+    lexer::{Kind, TokenStore},
     modifiers::{ModifierFlags, ModifierKind, Modifiers},
 };
 
 use super::{super::js::FunctionKind, statement::CallOrConstructorSignature};
 
-impl<'a> ParserImpl<'a> {
+impl<'a, Store: TokenStore<'a>> ParserImpl<'a, Store> {
     pub(crate) fn parse_ts_type(&mut self) -> TSType<'a> {
         if self.is_start_of_function_type_or_constructor_type() {
             return self.parse_function_or_constructor_type();

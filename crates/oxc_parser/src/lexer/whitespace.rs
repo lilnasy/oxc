@@ -1,12 +1,12 @@
 use super::{
-    Kind, Lexer,
+    Kind, Lexer, TokenStore,
     search::{SafeByteMatchTable, byte_search, safe_byte_match_table},
 };
 
 static NOT_REGULAR_WHITESPACE_OR_LINE_BREAK_TABLE: SafeByteMatchTable =
     safe_byte_match_table!(|b| !matches!(b, b' ' | b'\t' | b'\r' | b'\n'));
 
-impl Lexer<'_> {
+impl<'a, Store: TokenStore<'a>> Lexer<'a, Store> {
     pub(super) fn line_break_handler(&mut self) -> Kind {
         self.token.set_is_on_new_line(true);
         self.trivia_builder.handle_newline();

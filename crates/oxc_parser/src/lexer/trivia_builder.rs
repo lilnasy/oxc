@@ -312,12 +312,12 @@ mod test {
     use oxc_ast::{Comment, CommentContent, CommentKind, CommentPosition, ast::CommentNewlines};
     use oxc_span::{SourceType, Span};
 
-    use crate::Parser;
+    use crate::StandardParser;
 
     fn get_comments(source_text: &str) -> Vec<Comment> {
         let allocator = Allocator::default();
         let source_type = SourceType::default();
-        let ret = Parser::new(&allocator, source_text, source_type).parse();
+        let ret = StandardParser::new(&allocator, source_text, source_type).parse();
         assert!(ret.errors.is_empty());
         ret.program.comments.iter().copied().collect::<Vec<_>>()
     }

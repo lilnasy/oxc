@@ -2,9 +2,9 @@ use oxc_data_structures::assert_unchecked;
 
 use crate::diagnostics;
 
-use super::{Kind, Lexer};
+use super::{Kind, Lexer, TokenStore};
 
-impl Lexer<'_> {
+impl<'a, Store: TokenStore<'a>> Lexer<'a, Store> {
     /// Handle next byte of source.
     ///
     /// # SAFETY
@@ -17,34 +17,37 @@ impl Lexer<'_> {
     #[inline(always)]
     pub(super) unsafe fn handle_byte(&mut self, byte: u8) -> Kind {
         // SAFETY: Caller guarantees to uphold safety invariants
-        unsafe { BYTE_HANDLERS[byte as usize](self) }
+        let table = byte_handlers::<'a, Store>();
+        unsafe { table[byte as usize](self) }
     }
 }
 
-type ByteHandler = unsafe fn(&mut Lexer<'_>) -> Kind;
+type ByteHandler<'a, Store> = unsafe fn(&mut Lexer<'a, Store>) -> Kind;
 
 /// Lookup table mapping any incoming byte to a handler function defined below.
 /// <https://github.com/ratel-rust/ratel-core/blob/v0.7.0/ratel/src/lexer/mod.rs>
 #[rustfmt::skip]
-static BYTE_HANDLERS: [ByteHandler; 256] = [
-//  0    1    2    3    4    5    6    7    8    9    A    B    C    D    E    F    //
-    ERR, ERR, ERR, ERR, ERR, ERR, ERR, ERR, ERR, SPS, LIN, ISP, ISP, LIN, ERR, ERR, // 0
-    ERR, ERR, ERR, ERR, ERR, ERR, ERR, ERR, ERR, ERR, ERR, ERR, ERR, ERR, ERR, ERR, // 1
-    SPS, EXL, QOD, HAS, IDT, PRC, AMP, QOS, PNO, PNC, ATR, PLS, COM, MIN, PRD, SLH, // 2
-    ZER, DIG, DIG, DIG, DIG, DIG, DIG, DIG, DIG, DIG, COL, SEM, LSS, EQL, GTR, QST, // 3
-    AT_, IDT, IDT, IDT, IDT, IDT, IDT, IDT, IDT, IDT, IDT, IDT, IDT, IDT, IDT, IDT, // 4
-    IDT, IDT, IDT, IDT, IDT, IDT, IDT, IDT, IDT, IDT, IDT, BTO, ESC, BTC, CRT, IDT, // 5
-    TPL, L_A, L_B, L_C, L_D, L_E, L_F, L_G, IDT, L_I, IDT, L_K, L_L, L_M, L_N, L_O, // 6
-    L_P, IDT, L_R, L_S, L_T, L_U, L_V, L_W, IDT, L_Y, IDT, BEO, PIP, BEC, TLD, ERR, // 7
-    UER, UER, UER, UER, UER, UER, UER, UER, UER, UER, UER, UER, UER, UER, UER, UER, // 8
-    UER, UER, UER, UER, UER, UER, UER, UER, UER, UER, UER, UER, UER, UER, UER, UER, // 9
-    UER, UER, UER, UER, UER, UER, UER, UER, UER, UER, UER, UER, UER, UER, UER, UER, // A
-    UER, UER, UER, UER, UER, UER, UER, UER, UER, UER, UER, UER, UER, UER, UER, UER, // B
-    UER, UER, UNI, UNI, UNI, UNI, UNI, UNI, UNI, UNI, UNI, UNI, UNI, UNI, UNI, UNI, // C
-    UNI, UNI, UNI, UNI, UNI, UNI, UNI, UNI, UNI, UNI, UNI, UNI, UNI, UNI, UNI, UNI, // D
-    UNI, UNI, UNI, UNI, UNI, UNI, UNI, UNI, UNI, UNI, UNI, UNI, UNI, UNI, UNI, UNI, // E
-    UNI, UNI, UNI, UNI, UNI, UER, UER, UER, UER, UER, UER, UER, UER, UER, UER, UER, // F
-];
+const fn byte_handlers<'a, Store: TokenStore<'a>>() -> [ByteHandler<'a, Store>; 256] {
+    [
+        //  0    1    2    3    4    5    6    7    8    9    A    B    C    D    E    F    //
+        ERR, ERR, ERR, ERR, ERR, ERR, ERR, ERR, ERR, SPS, LIN, ISP, ISP, LIN, ERR, ERR, // 0
+        ERR, ERR, ERR, ERR, ERR, ERR, ERR, ERR, ERR, ERR, ERR, ERR, ERR, ERR, ERR, ERR, // 1
+        SPS, EXL, QOD, HAS, IDT, PRC, AMP, QOS, PNO, PNC, ATR, PLS, COM, MIN, PRD, SLH, // 2
+        ZER, DIG, DIG, DIG, DIG, DIG, DIG, DIG, DIG, DIG, COL, SEM, LSS, EQL, GTR, QST, // 3
+        AT_, IDT, IDT, IDT, IDT, IDT, IDT, IDT, IDT, IDT, IDT, IDT, IDT, IDT, IDT, IDT, // 4
+        IDT, IDT, IDT, IDT, IDT, IDT, IDT, IDT, IDT, IDT, IDT, BTO, ESC, BTC, CRT, IDT, // 5
+        TPL, L_A, L_B, L_C, L_D, L_E, L_F, L_G, IDT, L_I, IDT, L_K, L_L, L_M, L_N, L_O, // 6
+        L_P, IDT, L_R, L_S, L_T, L_U, L_V, L_W, IDT, L_Y, IDT, BEO, PIP, BEC, TLD, ERR, // 7
+        UER, UER, UER, UER, UER, UER, UER, UER, UER, UER, UER, UER, UER, UER, UER, UER, // 8
+        UER, UER, UER, UER, UER, UER, UER, UER, UER, UER, UER, UER, UER, UER, UER, UER, // 9
+        UER, UER, UER, UER, UER, UER, UER, UER, UER, UER, UER, UER, UER, UER, UER, UER, // A
+        UER, UER, UER, UER, UER, UER, UER, UER, UER, UER, UER, UER, UER, UER, UER, UER, // B
+        UER, UER, UNI, UNI, UNI, UNI, UNI, UNI, UNI, UNI, UNI, UNI, UNI, UNI, UNI, UNI, // C
+        UNI, UNI, UNI, UNI, UNI, UNI, UNI, UNI, UNI, UNI, UNI, UNI, UNI, UNI, UNI, UNI, // D
+        UNI, UNI, UNI, UNI, UNI, UNI, UNI, UNI, UNI, UNI, UNI, UNI, UNI, UNI, UNI, UNI, // E
+        UNI, UNI, UNI, UNI, UNI, UER, UER, UER, UER, UER, UER, UER, UER, UER, UER, UER, // F
+    ]
+}
 
 /// Macro for defining byte handler for an ASCII character.
 ///
@@ -88,7 +91,7 @@ static BYTE_HANDLERS: [ByteHandler; 256] = [
 macro_rules! ascii_byte_handler {
     ($id:ident($lex:ident) $body:expr) => {
         #[expect(non_snake_case)]
-        fn $id($lex: &mut Lexer) -> Kind {
+        fn $id<'a, Store: TokenStore<'a>>($lex: &mut Lexer<'a, Store>) -> Kind {
             // SAFETY: This macro is only used for ASCII characters
             unsafe {
                 assert_unchecked!(!$lex.source.is_eof());
@@ -136,7 +139,7 @@ macro_rules! ascii_byte_handler {
 macro_rules! ascii_identifier_handler {
     ($id:ident($str:ident) $body:expr) => {
         #[expect(non_snake_case)]
-        fn $id(lexer: &mut Lexer) -> Kind {
+        fn $id<'a, Store: TokenStore<'a>>(lexer: &mut Lexer<'a, Store>) -> Kind {
             // SAFETY: This macro is only used for ASCII characters
             let $str = unsafe { lexer.identifier_name_handler() };
             $body
@@ -653,7 +656,7 @@ ascii_identifier_handler!(L_Y(id_without_first_char) match id_without_first_char
 //
 // Note: Must not use `ascii_byte_handler!` macro, as this handler is for non-ASCII chars.
 #[expect(non_snake_case)]
-fn UNI(lexer: &mut Lexer) -> Kind {
+fn UNI<'a, Store: TokenStore<'a>>(lexer: &mut Lexer<'a, Store>) -> Kind {
     lexer.unicode_char_handler()
 }
 
@@ -665,6 +668,6 @@ fn UNI(lexer: &mut Lexer) -> Kind {
 //
 // Note: Must not use `ascii_byte_handler!` macro, as this handler is for non-ASCII bytes.
 #[expect(non_snake_case)]
-fn UER(_lexer: &mut Lexer) -> Kind {
+fn UER<'a, Store: TokenStore<'a>>(_lexer: &mut Lexer<'a, Store>) -> Kind {
     unreachable!();
 }

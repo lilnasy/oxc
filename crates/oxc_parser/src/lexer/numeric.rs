@@ -2,9 +2,9 @@ use oxc_syntax::identifier::{is_identifier_part_ascii, is_identifier_start};
 
 use crate::diagnostics;
 
-use super::{Kind, Lexer, Span};
+use super::{Kind, Lexer, Span, TokenStore};
 
-impl Lexer<'_> {
+impl<'a, Store: TokenStore<'a>> Lexer<'a, Store> {
     /// 12.9.3 Numeric Literals with `0` prefix
     pub(super) fn read_zero(&mut self) -> Kind {
         match self.peek_byte() {

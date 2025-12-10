@@ -13,14 +13,19 @@ use napi_derive::napi;
 use oxc::{
     allocator::{Allocator, FromIn, Vec as ArenaVec},
     ast_visit::utf8_to_utf16::Utf8ToUtf16,
+    parser::{Kind, Token},
     semantic::SemanticBuilder,
+    span::Atom,
 };
 use oxc_napi::get_source_type;
 
 use crate::{
-    AstType, ParserOptions, get_ast_type, parse_impl,
+    AstType, ParserOptions, get_ast_type, parse_impl_with_tokens,
     raw_transfer_constants::{BLOCK_ALIGN as BUFFER_ALIGN, BUFFER_SIZE},
-    raw_transfer_types::{EcmaScriptModule, Error, RawTransferData, RawTransferMetadata},
+    raw_transfer_types::{
+        EcmaScriptModule, Error, RawTransferData, RawTransferMetadata, SerializedRegex,
+        SerializedToken,
+    },
 };
 
 // For raw transfer, use a buffer 2 GiB in size, with 4 GiB alignment.
@@ -157,6 +162,53 @@ impl Task for ResolveTask {
     }
 }
 
+fn build_regex<'a>(value: &str, allocator: &'a Allocator) -> Option<SerializedRegex<'a>> {
+    let last_slash = value.rfind('/')?;
+    if last_slash == 0 {
+        return None;
+    }
+    let pattern = &value[1..last_slash];
+    let flags = &value[last_slash + 1..];
+    Some(SerializedRegex {
+        pattern: Atom::from_in(pattern, allocator),
+        flags: Atom::from_in(flags, allocator),
+    })
+}
+
+fn convert_tokens<'a>(
+    tokens: ArenaVec<'a, Token>,
+    source_text: &str,
+    allocator: &'a Allocator,
+    span_converter: &Utf8ToUtf16,
+) -> ArenaVec<'a, SerializedToken<'a>> {
+    let mut serialized = ArenaVec::new_in(allocator);
+    let mut converter = span_converter.converter();
+    for token in tokens {
+        let kind = token.kind();
+        let Some(token_type) = kind.eslint_token_type() else {
+            continue;
+        };
+
+        let mut start = token.start();
+        let mut end = token.end();
+        if let Some(conv) = converter.as_mut() {
+            conv.convert_offset(&mut start);
+            conv.convert_offset(&mut end);
+        }
+
+        let value = &source_text[token.start() as usize..token.end() as usize];
+        let regex = if kind == Kind::RegExp { build_regex(value, allocator) } else { None };
+
+        serialized.push(SerializedToken {
+            r#type: Atom::from_in(token_type, allocator),
+            value: Atom::from_in(value, allocator),
+            range: [start, end],
+            regex,
+        });
+    }
+    serialized
+}
+
 /// Parse AST into buffer.
 ///
 /// # SAFETY
@@ -222,10 +274,15 @@ unsafe fn parse_raw_impl(
         // SAFETY: Caller guarantees source occupies this region of the buffer and is valid UTF-8
         let source_text = unsafe { str::from_utf8_unchecked(source_text) };
 
-        let ret = parse_impl(&allocator, source_type, source_text, &options);
-        let mut program = ret.program;
+        let ret = parse_impl_with_tokens(&allocator, source_type, source_text, &options);
+        let oxc::parser::ParserReturn {
+            mut program,
+            mut module_record,
+            errors: ret_errors,
+            tokens,
+            ..
+        } = ret;
         let mut comments = mem::replace(&mut program.comments, ArenaVec::new_in(&allocator));
-        let mut module_record = ret.module_record;
 
         // Convert errors.
         // Run `SemanticBuilder` if requested.
@@ -235,9 +292,9 @@ unsafe fn parse_raw_impl(
         let mut errors = if options.show_semantic_errors == Some(true) {
             let semantic_ret = SemanticBuilder::new().with_check_syntax_error(true).build(&program);
 
-            if !ret.errors.is_empty() || !semantic_ret.errors.is_empty() {
+            if !ret_errors.is_empty() || !semantic_ret.errors.is_empty() {
                 Error::from_diagnostics_in(
-                    ret.errors.into_iter().chain(semantic_ret.errors),
+                    ret_errors.into_iter().chain(semantic_ret.errors),
                     source_text,
                     filename,
                     &allocator,
@@ -245,8 +302,8 @@ unsafe fn parse_raw_impl(
             } else {
                 ArenaVec::new_in(&allocator)
             }
-        } else if !ret.errors.is_empty() {
-            Error::from_diagnostics_in(ret.errors, source_text, filename, &allocator)
+        } else if !ret_errors.is_empty() {
+            Error::from_diagnostics_in(ret_errors, source_text, filename, &allocator)
         } else {
             ArenaVec::new_in(&allocator)
         };
@@ -263,12 +320,13 @@ unsafe fn parse_raw_impl(
                 }
             }
         }
+        let tokens = convert_tokens(tokens, source_text, &allocator, &span_converter);
 
         // Convert module record
         let module = EcmaScriptModule::from_in(module_record, &allocator);
 
         // Write `RawTransferData` to arena, and return pointer to it
-        let data = RawTransferData { program, comments, module, errors };
+        let data = RawTransferData { program, comments, module, errors, tokens };
         let data = allocator.alloc(data);
         ptr::from_ref(data).cast::<u8>()
     };

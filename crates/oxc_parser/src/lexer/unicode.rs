@@ -12,7 +12,7 @@ use oxc_syntax::{
     line_terminator::{CR, LF, LS, PS, is_irregular_line_terminator},
 };
 
-use super::{Kind, Lexer, Span};
+use super::{Kind, Lexer, Span, TokenStore};
 
 /// A Unicode escape sequence.
 ///
@@ -29,7 +29,7 @@ enum UnicodeEscape {
     LoneSurrogate(u32),
 }
 
-impl<'a> Lexer<'a> {
+impl<'a, Store: TokenStore<'a>> Lexer<'a, Store> {
     pub(super) fn unicode_char_handler(&mut self) -> Kind {
         let c = self.peek_char().unwrap();
         match c {

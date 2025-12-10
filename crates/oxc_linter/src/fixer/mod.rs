@@ -382,10 +382,10 @@ impl<'a> Fixer<'a> {
         #[cfg(debug_assertions)]
         if fixed && let Some(source_type) = self.source_type {
             use oxc_allocator::Allocator;
-            use oxc_parser::{ParseOptions, Parser};
+            use oxc_parser::{ParseOptions, StandardParser};
 
             let allocator = Allocator::default();
-            let parse_result = Parser::new(&allocator, &output, source_type)
+            let parse_result = StandardParser::new(&allocator, &output, source_type)
                 .with_options(ParseOptions {
                     parse_regular_expression: true,
                     allow_return_outside_function: true,

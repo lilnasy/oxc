@@ -1,6 +1,6 @@
-use super::{Kind, Lexer, Token};
+use super::{Kind, Lexer, Token, TokenStore};
 
-impl Lexer<'_> {
+impl<'a, Store: TokenStore<'a>> Lexer<'a, Store> {
     /// Section 12.8 Punctuators
     pub(super) fn read_dot(&mut self) -> Kind {
         if self.peek_2_bytes() == Some([b'.', b'.']) {

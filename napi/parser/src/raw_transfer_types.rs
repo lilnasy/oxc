@@ -23,6 +23,7 @@ pub struct RawTransferData<'a> {
     pub comments: Vec<'a, Comment>,
     pub module: EcmaScriptModule<'a>,
     pub errors: Vec<'a, Error<'a>>,
+    pub tokens: Vec<'a, SerializedToken<'a>>,
 }
 
 /// Metadata written to end of buffer.
@@ -197,6 +198,24 @@ pub struct StaticImport<'a> {
 pub struct StaticExport<'a> {
     pub span: Span,
     pub entries: Vec<'a, ExportEntry<'a>>,
+}
+
+#[ast]
+#[generate_derive(ESTree)]
+#[estree(no_type, no_ts_def)]
+pub struct SerializedToken<'a> {
+    pub r#type: Atom<'a>,
+    pub value: Atom<'a>,
+    pub range: [u32; 2],
+    pub regex: Option<SerializedRegex<'a>>,
+}
+
+#[ast]
+#[generate_derive(ESTree)]
+#[estree(no_type, no_ts_def)]
+pub struct SerializedRegex<'a> {
+    pub flags: Atom<'a>,
+    pub pattern: Atom<'a>,
 }
 
 impl<'a> FromIn<'a, ModuleRecord<'a>> for EcmaScriptModule<'a> {

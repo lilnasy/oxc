@@ -6,7 +6,7 @@ use oxc_syntax::line_terminator::is_line_terminator;
 use crate::diagnostics;
 
 use super::{
-    Kind, Lexer, cold_branch,
+    Kind, Lexer, TokenStore, cold_branch,
     search::{SafeByteMatchTable, byte_search, safe_byte_match_table},
     source::SourcePosition,
 };
@@ -22,7 +22,7 @@ static LINE_BREAK_TABLE: SafeByteMatchTable =
 static MULTILINE_COMMENT_START_TABLE: SafeByteMatchTable =
     safe_byte_match_table!(|b| matches!(b, b'*' | b'\r' | b'\n' | LS_OR_PS_FIRST));
 
-impl<'a> Lexer<'a> {
+impl<'a, Store: TokenStore<'a>> Lexer<'a, Store> {
     /// Section 12.4 Single Line Comment
     pub(super) fn skip_single_line_comment(&mut self) -> Kind {
         byte_search! {

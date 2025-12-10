@@ -9,7 +9,7 @@ use oxc_syntax::identifier::{
 use crate::diagnostics;
 
 use super::{
-    Kind, Lexer, SourcePosition, cold_branch,
+    Kind, Lexer, SourcePosition, TokenStore, cold_branch,
     search::{SafeByteMatchTable, byte_search, safe_byte_match_table},
 };
 
@@ -26,7 +26,7 @@ fn is_identifier_start_ascii_byte(byte: u8) -> bool {
     ASCII_ID_START_TABLE.matches(byte)
 }
 
-impl<'a> Lexer<'a> {
+impl<'a, Store: TokenStore<'a>> Lexer<'a, Store> {
     /// Handle identifier with ASCII start character.
     /// Returns text of the identifier, minus its first char.
     ///

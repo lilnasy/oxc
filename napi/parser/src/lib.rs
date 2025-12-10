@@ -5,7 +5,7 @@ use napi_derive::napi;
 
 use oxc::{
     allocator::Allocator,
-    parser::{ParseOptions, Parser, ParserReturn},
+    parser::{ParseOptions, Parser, ParserReturn, RealTokenStore},
     semantic::SemanticBuilder,
     span::SourceType,
 };
@@ -75,6 +75,20 @@ fn parse_impl<'a>(
     options: &ParserOptions,
 ) -> ParserReturn<'a> {
     Parser::new(allocator, source_text, source_type)
+        .with_options(ParseOptions {
+            preserve_parens: options.preserve_parens.unwrap_or(true),
+            ..ParseOptions::default()
+        })
+        .parse()
+}
+
+fn parse_impl_with_tokens<'a>(
+    allocator: &'a Allocator,
+    source_type: SourceType,
+    source_text: &'a str,
+    options: &ParserOptions,
+) -> ParserReturn<'a> {
+    Parser::<RealTokenStore>::new(allocator, source_text, source_type)
         .with_options(ParseOptions {
             preserve_parens: options.preserve_parens.unwrap_or(true),
             ..ParseOptions::default()
