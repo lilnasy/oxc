@@ -18,11 +18,11 @@ use super::{
 };
 use crate::{
     Context, ParserImpl, diagnostics,
-    lexer::{Kind, parse_big_int, parse_float, parse_int},
+    lexer::{Kind, ParserConfig, parse_big_int, parse_float, parse_int},
     modifiers::Modifiers,
 };
 
-impl<'a> ParserImpl<'a> {
+impl<'a, Config: ParserConfig> ParserImpl<'a, Config> {
     pub(crate) fn parse_paren_expression(&mut self) -> Expression<'a> {
         let opening_span = self.cur_token().span();
         self.expect(Kind::LParen);

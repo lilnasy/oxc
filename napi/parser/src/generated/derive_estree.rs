@@ -16,6 +16,7 @@ impl ESTree for RawTransferData<'_> {
         state.serialize_field("comments", &self.comments);
         state.serialize_field("module", &self.module);
         state.serialize_field("errors", &self.errors);
+        state.serialize_field("tokens", &self.tokens);
         state.end();
     }
 }
@@ -78,6 +79,27 @@ impl ESTree for StaticExport<'_> {
         let mut state = serializer.serialize_struct();
         state.serialize_field("entries", &self.entries);
         state.serialize_span(self.span);
+        state.end();
+    }
+}
+
+impl ESTree for SerializedToken<'_> {
+    fn serialize<S: Serializer>(&self, serializer: S) {
+        let mut state = serializer.serialize_struct();
+        state.serialize_field("type", &self.r#type);
+        state.serialize_field("value", &self.value);
+        state.serialize_field("start", &self.range.start);
+        state.serialize_field("end", &self.range.end);
+        state.serialize_field("regex", &self.regex);
+        state.end();
+    }
+}
+
+impl ESTree for SerializedRegex<'_> {
+    fn serialize<S: Serializer>(&self, serializer: S) {
+        let mut state = serializer.serialize_struct();
+        state.serialize_field("flags", &self.flags);
+        state.serialize_field("pattern", &self.pattern);
         state.end();
     }
 }

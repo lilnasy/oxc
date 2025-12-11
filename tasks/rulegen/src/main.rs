@@ -15,7 +15,7 @@ use oxc_ast::ast::{
     TaggedTemplateExpression, TemplateLiteral,
 };
 use oxc_ast_visit::Visit;
-use oxc_parser::Parser;
+use oxc_parser::{Parser, lexer::StandardParserConfig};
 use oxc_span::{GetSpan, SourceType, Span};
 use rustc_hash::{FxHashMap, FxHashSet};
 use serde::Serialize;
@@ -1444,7 +1444,8 @@ fn main() {
         Ok(Ok(body)) => {
             let allocator = Allocator::default();
             let source_type = SourceType::from_path(rule_test_path).unwrap();
-            let ret = Parser::new(&allocator, &body, source_type).parse();
+            let ret =
+                Parser::<'_, StandardParserConfig>::new(&allocator, &body, source_type).parse();
             assert!(ret.errors.is_empty());
 
             let mut state = State::new(&body);
@@ -1531,7 +1532,8 @@ fn main() {
         Ok(Ok(body)) => {
             let allocator = Allocator::default();
             let source_type = SourceType::from_path(rule_src_path).unwrap();
-            let ret = Parser::new(&allocator, &body, source_type).parse();
+            let ret =
+                Parser::<'_, StandardParserConfig>::new(&allocator, &body, source_type).parse();
             assert!(ret.errors.is_empty());
             let debug_mode = false;
             let mut config = RuleConfig::new(&body, debug_mode);

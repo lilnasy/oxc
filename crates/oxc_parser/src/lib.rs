@@ -79,6 +79,8 @@ mod ts;
 
 mod diagnostics;
 
+pub use lexer::{Kind, NoopTokenStore, RealParserConfig, RealTokenStore, Token};
+
 // Expose lexer only in benchmarks
 #[cfg(not(feature = "benchmarking"))]
 mod lexer;
@@ -86,7 +88,8 @@ mod lexer;
 #[doc(hidden)]
 pub mod lexer;
 
-use oxc_allocator::{Allocator, Box as ArenaBox, Dummy};
+use crate::lexer::{ParserConfig, StandardParserConfig};
+use oxc_allocator::{Allocator, Box as ArenaBox, Dummy, Vec as ArenaVec};
 use oxc_ast::{
     AstBuilder,
     ast::{Expression, Program},
@@ -94,11 +97,12 @@ use oxc_ast::{
 use oxc_diagnostics::OxcDiagnostic;
 use oxc_span::{ModuleKind, SourceType, Span};
 use oxc_syntax::module_record::ModuleRecord;
+use std::marker::PhantomData;
 
 use crate::{
     context::{Context, StatementContext},
     error_handler::FatalError,
-    lexer::{Lexer, Token},
+    lexer::Lexer,
     module_record::ModuleRecordBuilder,
     state::ParserState,
 };
@@ -180,6 +184,11 @@ pub struct ParserReturn<'a> {
 
     /// Whether the file is [flow](https://flow.org).
     pub is_flow_language: bool,
+
+    /// All tokens from the lexer, in source order.
+    ///
+    /// Empty when token collection is disabled (default parser).
+    pub tokens: ArenaVec<'a, Token>,
 }
 
 /// Parse options
@@ -235,26 +244,58 @@ impl Default for ParseOptions {
     }
 }
 
+impl ParserReturn<'_> {
+    /// Return the collected tokens (may be empty when token storage is disabled).
+    #[inline]
+    pub fn tokens(&self) -> &[Token] {
+        &self.tokens
+    }
+}
+
 /// Recursive Descent Parser for ECMAScript and TypeScript
 ///
 /// See [`Parser::parse`] for entry function.
-pub struct Parser<'a> {
+pub struct Parser<'a, Config: ParserConfig = StandardParserConfig> {
     allocator: &'a Allocator,
     source_text: &'a str,
     source_type: SourceType,
     options: ParseOptions,
+    marker: PhantomData<Config>,
 }
 
-impl<'a> Parser<'a> {
+impl<'a> Parser<'a, StandardParserConfig> {
+    /// Create a new [`Parser`] using the standard configuration.
+    ///
+    /// # Parameters
+    /// - `allocator`: [Memory arena](oxc_allocator::Allocator) for allocating AST nodes
+    /// - `source_text`: Source code to parse
+    /// - `source_type`: Source type (e.g. JavaScript, TypeScript, JSX, ESM Module, Script)
+    #[inline]
+    pub fn new(allocator: &'a Allocator, source_text: &'a str, source_type: SourceType) -> Self {
+        Self {
+            allocator,
+            source_text,
+            source_type,
+            options: ParseOptions::default(),
+            marker: PhantomData,
+        }
+    }
+}
+
+impl<'a, Config: ParserConfig> Parser<'a, Config> {
     /// Create a new [`Parser`]
     ///
     /// # Parameters
     /// - `allocator`: [Memory arena](oxc_allocator::Allocator) for allocating AST nodes
     /// - `source_text`: Source code to parse
     /// - `source_type`: Source type (e.g. JavaScript, TypeScript, JSX, ESM Module, Script)
-    pub fn new(allocator: &'a Allocator, source_text: &'a str, source_type: SourceType) -> Self {
+    pub fn new_with_config(
+        allocator: &'a Allocator,
+        source_text: &'a str,
+        source_type: SourceType,
+    ) -> Self {
         let options = ParseOptions::default();
-        Self { allocator, source_text, source_type, options }
+        Self { allocator, source_text, source_type, options, marker: PhantomData }
     }
 
     /// Set parse options
@@ -299,7 +340,7 @@ mod parser_parse {
         }
     }
 
-    impl<'a> Parser<'a> {
+    impl<'a, Config: ParserConfig> Parser<'a, Config> {
         /// Main entry point
         ///
         /// Returns an empty `Program` on unrecoverable error,
@@ -308,7 +349,7 @@ mod parser_parse {
         /// See the [module-level documentation](crate) for examples and more information.
         pub fn parse(self) -> ParserReturn<'a> {
             let unique = UniquePromise::new();
-            let parser = ParserImpl::new(
+            let parser: ParserImpl<'a, Config> = ParserImpl::new(
                 self.allocator,
                 self.source_text,
                 self.source_type,
@@ -339,7 +380,7 @@ mod parser_parse {
         /// If the source code being parsed has syntax errors.
         pub fn parse_expression(self) -> Result<Expression<'a>, Vec<OxcDiagnostic>> {
             let unique = UniquePromise::new();
-            let parser = ParserImpl::new(
+            let parser: ParserImpl<'a, Config> = ParserImpl::new(
                 self.allocator,
                 self.source_text,
                 self.source_type,
@@ -354,10 +395,10 @@ use parser_parse::UniquePromise;
 
 /// Implementation of parser.
 /// `Parser` is just a public wrapper, the guts of the implementation is in this type.
-struct ParserImpl<'a> {
+struct ParserImpl<'a, Config: ParserConfig> {
     options: ParseOptions,
 
-    pub(crate) lexer: Lexer<'a>,
+    lexer: Lexer<'a, Config>,
 
     /// SourceType: JavaScript or TypeScript, Script or Module, jsx support?
     source_type: SourceType,
@@ -393,7 +434,7 @@ struct ParserImpl<'a> {
     is_ts: bool,
 }
 
-impl<'a> ParserImpl<'a> {
+impl<'a, Config: ParserConfig> ParserImpl<'a, Config> {
     /// Create a new `ParserImpl`.
     ///
     /// Requiring a `UniquePromise` to be provided guarantees only 1 `ParserImpl` can exist
@@ -467,13 +508,14 @@ impl<'a> ParserImpl<'a> {
         let (module_record, module_record_errors) = self.module_record_builder.build();
         if errors.len() != 1 {
             errors.reserve(self.lexer.errors.len() + self.errors.len());
-            errors.extend(self.lexer.errors);
-            errors.extend(self.errors);
+            errors.append(&mut self.lexer.errors);
+            errors.append(&mut self.errors);
             // Skip checking for exports in TypeScript {
             if !self.source_type.is_typescript() {
                 errors.extend(module_record_errors);
             }
         }
+        let tokens = self.lexer.take_tokens();
         let irregular_whitespaces =
             self.lexer.trivia_builder.irregular_whitespaces.into_boxed_slice();
 
@@ -493,6 +535,7 @@ impl<'a> ParserImpl<'a> {
             irregular_whitespaces,
             panicked,
             is_flow_language,
+            tokens,
         }
     }
 
@@ -600,7 +643,7 @@ mod test {
         let allocator = Allocator::default();
         let source_type = SourceType::default();
         let source = "";
-        let ret = Parser::new(&allocator, source, source_type).parse();
+        let ret = Parser::<'_, StandardParserConfig>::new(&allocator, source, source_type).parse();
         assert!(ret.program.is_empty());
         assert!(ret.errors.is_empty());
         assert!(!ret.is_flow_language);
@@ -611,7 +654,9 @@ mod test {
         let allocator = Allocator::default();
         let source_type = SourceType::default();
         let source = "a";
-        let expr = Parser::new(&allocator, source, source_type).parse_expression().unwrap();
+        let expr = Parser::<'_, StandardParserConfig>::new(&allocator, source, source_type)
+            .parse_expression()
+            .unwrap();
         assert!(matches!(expr, Expression::Identifier(_)));
     }
 
@@ -630,7 +675,8 @@ mod test {
             "/* @flow */ super;",
         ];
         for source in sources {
-            let ret = Parser::new(&allocator, source, source_type).parse();
+            let ret =
+                Parser::<'_, StandardParserConfig>::new(&allocator, source, source_type).parse();
             assert!(ret.is_flow_language);
             assert_eq!(ret.errors.len(), 1);
             assert_eq!(ret.errors.first().unwrap().to_string(), "Flow is not supported");
@@ -642,7 +688,7 @@ mod test {
         let allocator = Allocator::default();
         let source_type = SourceType::from_path(Path::new("module.ts")).unwrap();
         let source = "declare module 'test'\n";
-        let ret = Parser::new(&allocator, source, source_type).parse();
+        let ret = Parser::<'_, StandardParserConfig>::new(&allocator, source, source_type).parse();
         assert_eq!(ret.errors.len(), 0);
     }
 
@@ -656,7 +702,8 @@ mod test {
             (";'use strict';", 2),
         ];
         for (source, body_length) in sources {
-            let ret = Parser::new(&allocator, source, source_type).parse();
+            let ret =
+                Parser::<'_, StandardParserConfig>::new(&allocator, source, source_type).parse();
             assert!(ret.program.directives.is_empty(), "{source}");
             assert_eq!(ret.program.body.len(), body_length, "{source}");
         }
@@ -669,7 +716,9 @@ mod test {
         {
             let source = "%DebugPrint('Raging against the Dying Light')";
             let opts = ParseOptions { allow_v8_intrinsics: true, ..ParseOptions::default() };
-            let ret = Parser::new(&allocator, source, source_type).with_options(opts).parse();
+            let ret = Parser::<'_, StandardParserConfig>::new(&allocator, source, source_type)
+                .with_options(opts)
+                .parse();
             assert!(ret.errors.is_empty());
 
             if let Some(Statement::ExpressionStatement(expr_stmt)) = ret.program.body.first() {
@@ -685,7 +734,9 @@ mod test {
         {
             let source = "%DebugPrint(...illegalSpread)";
             let opts = ParseOptions { allow_v8_intrinsics: true, ..ParseOptions::default() };
-            let ret = Parser::new(&allocator, source, source_type).with_options(opts).parse();
+            let ret = Parser::<'_, StandardParserConfig>::new(&allocator, source, source_type)
+                .with_options(opts)
+                .parse();
             assert_eq!(ret.errors.len(), 1);
             assert_eq!(
                 ret.errors[0].to_string(),
@@ -694,7 +745,8 @@ mod test {
         }
         {
             let source = "%DebugPrint('~~')";
-            let ret = Parser::new(&allocator, source, source_type).parse();
+            let ret =
+                Parser::<'_, StandardParserConfig>::new(&allocator, source, source_type).parse();
             assert_eq!(ret.errors.len(), 1);
             assert_eq!(ret.errors[0].to_string(), "Unexpected token");
         }
@@ -704,9 +756,12 @@ mod test {
             let source_type = SourceType::default().with_typescript(true);
             // Should not panic whether `allow_v8_intrinsics` is set or not.
             let opts = ParseOptions { allow_v8_intrinsics: true, ..ParseOptions::default() };
-            let ret = Parser::new(&allocator, source, source_type).with_options(opts).parse();
+            let ret = Parser::<'_, StandardParserConfig>::new(&allocator, source, source_type)
+                .with_options(opts)
+                .parse();
             assert_eq!(ret.errors.len(), 1);
-            let ret = Parser::new(&allocator, source, source_type).parse();
+            let ret =
+                Parser::<'_, StandardParserConfig>::new(&allocator, source, source_type).parse();
             assert_eq!(ret.errors.len(), 1);
         }
     }
@@ -724,7 +779,8 @@ mod test {
             ),
         ];
         for (source, kind) in sources {
-            let ret = Parser::new(&allocator, source, source_type).parse();
+            let ret =
+                Parser::<'_, StandardParserConfig>::new(&allocator, source, source_type).parse();
             let comments = &ret.program.comments;
             assert_eq!(comments.len(), 1, "{source}");
             assert_eq!(comments.first().unwrap().kind, kind, "{source}");
@@ -736,7 +792,7 @@ mod test {
         let allocator = Allocator::default();
         let source_type = SourceType::default();
         let source = "#!/usr/bin/node\n;";
-        let ret = Parser::new(&allocator, source, source_type).parse();
+        let ret = Parser::<'_, StandardParserConfig>::new(&allocator, source, source_type).parse();
         assert_eq!(ret.program.hashbang.unwrap().value.as_str(), "/usr/bin/node");
     }
 
@@ -747,13 +803,15 @@ mod test {
         assert!(source_type.is_unambiguous());
         let sources = ["import x from 'foo';", "export {x} from 'foo';", "import.meta"];
         for source in sources {
-            let ret = Parser::new(&allocator, source, source_type).parse();
+            let ret =
+                Parser::<'_, StandardParserConfig>::new(&allocator, source, source_type).parse();
             assert!(ret.program.source_type.is_module());
         }
 
         let sources = ["", "import('foo')"];
         for source in sources {
-            let ret = Parser::new(&allocator, source, source_type).parse();
+            let ret =
+                Parser::<'_, StandardParserConfig>::new(&allocator, source, source_type).parse();
             assert!(ret.program.source_type.is_script());
         }
     }
@@ -764,7 +822,8 @@ mod test {
         let source_type = SourceType::default();
         let sources = ["2n", ";'1234567890123456789012345678901234567890'"];
         for source in sources {
-            let ret = Parser::new(&allocator, source, source_type).parse();
+            let ret =
+                Parser::<'_, StandardParserConfig>::new(&allocator, source, source_type).parse();
             assert!(!ret.program.body.is_empty());
         }
     }
@@ -792,7 +851,9 @@ mod test {
         assert_eq!(source.len(), MAX_LEN + 1);
 
         let allocator = Allocator::default();
-        let ret = Parser::new(&allocator, &source, SourceType::default()).parse();
+        let ret =
+            Parser::<'_, StandardParserConfig>::new(&allocator, &source, SourceType::default())
+                .parse();
         assert!(ret.program.is_empty());
         assert!(ret.panicked);
         assert_eq!(ret.errors.len(), 1);

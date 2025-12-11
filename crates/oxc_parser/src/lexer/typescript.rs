@@ -1,6 +1,8 @@
+use crate::lexer::ParserConfig;
+
 use super::{Kind, Lexer, Token};
 
-impl Lexer<'_> {
+impl<Config: ParserConfig> Lexer<'_, Config> {
     /// Re-tokenize '<<' or '<=' or '<<=' to '<'
     pub(crate) fn re_lex_as_typescript_l_angle(&mut self, offset: u32) -> Token {
         self.token.set_start(self.offset() - offset);

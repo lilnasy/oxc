@@ -6,7 +6,7 @@ use oxc_allocator::{Address, Allocator, GetAddress, UnstableAddress};
 use oxc_ast::ast::*;
 use oxc_ast_visit::{VisitMut, walk_mut};
 use oxc_diagnostics::OxcDiagnostic;
-use oxc_parser::Parser;
+use oxc_parser::{Parser, lexer::StandardParserConfig};
 use oxc_semantic::{IsGlobalReference, ReferenceFlags, ScopeFlags, Scoping};
 use oxc_span::{CompactStr, SPAN, SourceType};
 use oxc_syntax::identifier::is_identifier_name;
@@ -200,7 +200,8 @@ impl ReplaceGlobalDefinesConfig {
     }
 
     fn check_value(allocator: &Allocator, source_text: &str) -> Result<(), Vec<OxcDiagnostic>> {
-        Parser::new(allocator, source_text, SourceType::default()).parse_expression()?;
+        Parser::<'_, StandardParserConfig>::new(allocator, source_text, SourceType::default())
+            .parse_expression()?;
         Ok(())
     }
 }
@@ -300,9 +301,13 @@ impl<'a> ReplaceGlobalDefines<'a> {
         // Allocate the string lazily because replacement happens rarely.
         let source_text = self.allocator.alloc_str(source_text);
         // Unwrapping here, it should already be checked by [ReplaceGlobalDefinesConfig::new].
-        let mut expr = Parser::new(self.allocator, source_text, SourceType::default())
-            .parse_expression()
-            .unwrap();
+        let mut expr = Parser::<'_, StandardParserConfig>::new(
+            self.allocator,
+            source_text,
+            SourceType::default(),
+        )
+        .parse_expression()
+        .unwrap();
 
         UpdateReplacedExpression { ctx }.visit_expression(&mut expr);
 

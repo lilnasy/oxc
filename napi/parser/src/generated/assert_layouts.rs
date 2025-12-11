@@ -10,12 +10,13 @@ use crate::raw_transfer_types::*;
 #[cfg(target_pointer_width = "64")]
 const _: () = {
     // Padding: 0 bytes
-    assert!(size_of::<RawTransferData>() == 280);
+    assert!(size_of::<RawTransferData>() == 304);
     assert!(align_of::<RawTransferData>() == 8);
     assert!(offset_of!(RawTransferData, program) == 0);
     assert!(offset_of!(RawTransferData, comments) == 128);
     assert!(offset_of!(RawTransferData, module) == 152);
     assert!(offset_of!(RawTransferData, errors) == 256);
+    assert!(offset_of!(RawTransferData, tokens) == 280);
 
     // Padding: 3 bytes
     assert!(size_of::<RawTransferMetadata>() == 16);
@@ -63,17 +64,32 @@ const _: () = {
     assert!(align_of::<StaticExport>() == 8);
     assert!(offset_of!(StaticExport, span) == 0);
     assert!(offset_of!(StaticExport, entries) == 8);
+
+    // Padding: 0 bytes
+    assert!(size_of::<SerializedToken>() == 72);
+    assert!(align_of::<SerializedToken>() == 8);
+    assert!(offset_of!(SerializedToken, r#type) == 0);
+    assert!(offset_of!(SerializedToken, value) == 16);
+    assert!(offset_of!(SerializedToken, range) == 32);
+    assert!(offset_of!(SerializedToken, regex) == 40);
+
+    // Padding: 0 bytes
+    assert!(size_of::<SerializedRegex>() == 32);
+    assert!(align_of::<SerializedRegex>() == 8);
+    assert!(offset_of!(SerializedRegex, flags) == 0);
+    assert!(offset_of!(SerializedRegex, pattern) == 16);
 };
 
 #[cfg(target_pointer_width = "32")]
 const _: () = if cfg!(target_family = "wasm") || align_of::<u64>() == 8 {
     // Padding: 0 bytes
-    assert!(size_of::<RawTransferData>() == 188);
+    assert!(size_of::<RawTransferData>() == 204);
     assert!(align_of::<RawTransferData>() == 4);
     assert!(offset_of!(RawTransferData, program) == 0);
     assert!(offset_of!(RawTransferData, comments) == 88);
     assert!(offset_of!(RawTransferData, module) == 104);
     assert!(offset_of!(RawTransferData, errors) == 172);
+    assert!(offset_of!(RawTransferData, tokens) == 188);
 
     // Padding: 3 bytes
     assert!(size_of::<RawTransferMetadata>() == 16);
@@ -121,6 +137,20 @@ const _: () = if cfg!(target_family = "wasm") || align_of::<u64>() == 8 {
     assert!(align_of::<StaticExport>() == 4);
     assert!(offset_of!(StaticExport, span) == 0);
     assert!(offset_of!(StaticExport, entries) == 8);
+
+    // Padding: 0 bytes
+    assert!(size_of::<SerializedToken>() == 40);
+    assert!(align_of::<SerializedToken>() == 4);
+    assert!(offset_of!(SerializedToken, r#type) == 0);
+    assert!(offset_of!(SerializedToken, value) == 8);
+    assert!(offset_of!(SerializedToken, range) == 16);
+    assert!(offset_of!(SerializedToken, regex) == 24);
+
+    // Padding: 0 bytes
+    assert!(size_of::<SerializedRegex>() == 16);
+    assert!(align_of::<SerializedRegex>() == 4);
+    assert!(offset_of!(SerializedRegex, flags) == 0);
+    assert!(offset_of!(SerializedRegex, pattern) == 8);
 };
 
 #[cfg(not(any(target_pointer_width = "64", target_pointer_width = "32")))]

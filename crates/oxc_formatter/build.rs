@@ -84,6 +84,9 @@ fn generate_modules(
 
     // Generate submodules
     for (dir_name, subdir) in &structure.subdirs {
+        if subdir.test_files.is_empty() && subdir.subdirs.is_empty() {
+            continue;
+        }
         let module_name = sanitize_module_name(dir_name);
 
         writeln!(f, "{indent}#[cfg(test)]")?;

@@ -4556,6 +4556,7 @@ function deserializeRawTransferData(pos) {
     comments: deserializeVecComment(pos + 128),
     module: deserializeEcmaScriptModule(pos + 152),
     errors: deserializeVecError(pos + 256),
+    tokens: deserializeVecSerializedToken(pos + 280),
   };
 }
 
@@ -4620,6 +4621,27 @@ function deserializeStaticExport(pos) {
     entries: deserializeVecExportEntry(pos + 8),
     start,
     end,
+  };
+}
+
+function deserializeSerializedToken(pos) {
+  let start = deserializeU32(pos + 32),
+    end = deserializeU32(pos + 36),
+    node = {
+      type: deserializeStr(pos),
+      value: deserializeStr(pos + 16),
+      start,
+      end,
+      regex: null,
+    };
+  node.regex = deserializeOptionSerializedRegex(pos + 40);
+  return node;
+}
+
+function deserializeSerializedRegex(pos) {
+  return {
+    flags: deserializeStr(pos),
+    pattern: deserializeStr(pos + 16),
   };
 }
 
@@ -5848,6 +5870,18 @@ function deserializeVecError(pos) {
   return arr;
 }
 
+function deserializeVecSerializedToken(pos) {
+  let arr = [],
+    pos32 = pos >> 2;
+  pos = uint32[pos32];
+  let endPos = pos + uint32[pos32 + 2] * 72;
+  for (; pos !== endPos; ) {
+    arr.push(deserializeSerializedToken(pos));
+    pos += 72;
+  }
+  return arr;
+}
+
 function deserializeVecErrorLabel(pos) {
   let arr = [],
     pos32 = pos >> 2;
@@ -5930,4 +5964,9 @@ function deserializeVecExportEntry(pos) {
     pos += 144;
   }
   return arr;
+}
+
+function deserializeOptionSerializedRegex(pos) {
+  if (uint32[pos >> 2] === 0 && uint32[(pos + 4) >> 2] === 0) return null;
+  return deserializeSerializedRegex(pos);
 }

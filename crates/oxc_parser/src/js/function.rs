@@ -5,7 +5,7 @@ use oxc_span::Span;
 use super::FunctionKind;
 use crate::{
     Context, ParserImpl, StatementContext, diagnostics,
-    lexer::Kind,
+    lexer::{Kind, ParserConfig},
     modifiers::{ModifierFlags, ModifierKind, Modifiers},
 };
 
@@ -19,7 +19,7 @@ impl FunctionKind {
     }
 }
 
-impl<'a> ParserImpl<'a> {
+impl<'a, Config: ParserConfig> ParserImpl<'a, Config> {
     pub(crate) fn at_function_with_async(&mut self) -> bool {
         self.at(Kind::Function)
             || self.at(Kind::Async) && {

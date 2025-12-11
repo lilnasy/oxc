@@ -382,16 +382,17 @@ impl<'a> Fixer<'a> {
         #[cfg(debug_assertions)]
         if fixed && let Some(source_type) = self.source_type {
             use oxc_allocator::Allocator;
-            use oxc_parser::{ParseOptions, Parser};
+            use oxc_parser::{ParseOptions, Parser, lexer::StandardParserConfig};
 
             let allocator = Allocator::default();
-            let parse_result = Parser::new(&allocator, &output, source_type)
-                .with_options(ParseOptions {
-                    parse_regular_expression: true,
-                    allow_return_outside_function: true,
-                    ..ParseOptions::default()
-                })
-                .parse();
+            let parse_result =
+                Parser::<'_, StandardParserConfig>::new(&allocator, &output, source_type)
+                    .with_options(ParseOptions {
+                        parse_regular_expression: true,
+                        allow_return_outside_function: true,
+                        ..ParseOptions::default()
+                    })
+                    .parse();
             debug_assert!(
                 parse_result.errors.is_empty() && !parse_result.panicked,
                 "Linter fixer produced invalid syntax.\n\nInput code: \n```\n{source_text}\n```\n\nFixed code: \n```\n{output}\n```\n\nParse errors: {:?}",

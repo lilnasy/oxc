@@ -12277,7 +12277,7 @@ export class RawTransferData {
     const cached = nodes.get(pos + 1);
     if (cached !== void 0) return cached;
 
-    this.#internal = { pos, ast, $comments: void 0, $errors: void 0 };
+    this.#internal = { pos, ast, $comments: void 0, $errors: void 0, $tokens: void 0 };
     nodes.set(pos + 1, this);
   }
 
@@ -12305,12 +12305,20 @@ export class RawTransferData {
     return (internal.$errors = constructVecError(internal.pos + 256, internal.ast));
   }
 
+  get tokens() {
+    const internal = this.#internal,
+      cached = internal.$tokens;
+    if (cached !== void 0) return cached;
+    return (internal.$tokens = constructVecSerializedToken(internal.pos + 280, internal.ast));
+  }
+
   toJSON() {
     return {
       program: this.program,
       comments: this.comments,
       module: this.module,
       errors: this.errors,
+      tokens: this.tokens,
     };
   }
 
@@ -12619,6 +12627,102 @@ export class StaticExport {
 }
 
 const DebugStaticExport = class StaticExport {};
+
+export class SerializedToken {
+  #internal;
+
+  constructor(pos, ast) {
+    if (ast?.token !== TOKEN) constructorError();
+
+    const { nodes } = ast;
+    const cached = nodes.get(pos);
+    if (cached !== void 0) return cached;
+
+    this.#internal = { pos, ast, $type: void 0, $value: void 0 };
+    nodes.set(pos, this);
+  }
+
+  get type() {
+    const internal = this.#internal,
+      cached = internal.$type;
+    if (cached !== void 0) return cached;
+    return (internal.$type = constructStr(internal.pos, internal.ast));
+  }
+
+  get value() {
+    const internal = this.#internal,
+      cached = internal.$value;
+    if (cached !== void 0) return cached;
+    return (internal.$value = constructStr(internal.pos + 16, internal.ast));
+  }
+
+  get range() {
+    const internal = this.#internal;
+    return new Span(internal.pos + 32, internal.ast);
+  }
+
+  get regex() {
+    const internal = this.#internal;
+    return constructOptionSerializedRegex(internal.pos + 40, internal.ast);
+  }
+
+  toJSON() {
+    return {
+      type: this.type,
+      value: this.value,
+      range: this.range,
+      regex: this.regex,
+    };
+  }
+
+  [inspectSymbol]() {
+    return Object.setPrototypeOf(this.toJSON(), DebugSerializedToken.prototype);
+  }
+}
+
+const DebugSerializedToken = class SerializedToken {};
+
+export class SerializedRegex {
+  #internal;
+
+  constructor(pos, ast) {
+    if (ast?.token !== TOKEN) constructorError();
+
+    const { nodes } = ast;
+    const cached = nodes.get(pos);
+    if (cached !== void 0) return cached;
+
+    this.#internal = { pos, ast, $flags: void 0, $pattern: void 0 };
+    nodes.set(pos, this);
+  }
+
+  get flags() {
+    const internal = this.#internal,
+      cached = internal.$flags;
+    if (cached !== void 0) return cached;
+    return (internal.$flags = constructStr(internal.pos, internal.ast));
+  }
+
+  get pattern() {
+    const internal = this.#internal,
+      cached = internal.$pattern;
+    if (cached !== void 0) return cached;
+    return (internal.$pattern = constructStr(internal.pos + 16, internal.ast));
+  }
+
+  toJSON() {
+    return {
+      flags: this.flags,
+      pattern: this.pattern,
+    };
+  }
+
+  [inspectSymbol]() {
+    return Object.setPrototypeOf(this.toJSON(), DebugSerializedRegex.prototype);
+  }
+}
+
+const DebugSerializedRegex = class SerializedRegex {};
 
 function constructU32(pos, ast) {
   return ast.buffer.uint32[pos >> 2];
@@ -13780,6 +13884,16 @@ function constructError(pos, ast) {
   return new Error(pos, ast);
 }
 
+function constructVecSerializedToken(pos, ast) {
+  const { uint32 } = ast.buffer,
+    pos32 = pos >> 2;
+  return new NodeArray(uint32[pos32], uint32[pos32 + 2], 72, constructSerializedToken, ast);
+}
+
+function constructSerializedToken(pos, ast) {
+  return new SerializedToken(pos, ast);
+}
+
 function constructVecErrorLabel(pos, ast) {
   const { uint32 } = ast.buffer,
     pos32 = pos >> 2;
@@ -13848,4 +13962,9 @@ function constructVecExportEntry(pos, ast) {
 
 function constructExportEntry(pos, ast) {
   return new ExportEntry(pos, ast);
+}
+
+function constructOptionSerializedRegex(pos, ast) {
+  if (ast.buffer.uint32[pos >> 2] === 0 && ast.buffer.uint32[(pos + 4) >> 2] === 0) return null;
+  return new SerializedRegex(pos, ast);
 }
